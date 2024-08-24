@@ -1,3 +1,4 @@
+import os
 from rest_framework import serializers
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
@@ -21,6 +22,7 @@ class MessagesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Messages
         fields = ('id', 'chat_id', 'sender_id', 'text', 'date_send', 'date_change', 'date_look')
+        
 
 class CreateChat(APIView):
     permission_classes = [IsAuthenticated]
@@ -35,8 +37,8 @@ class CreateChat(APIView):
             if not chatIsExist:
                 creating_chat = Chat(first_user=current_user.id, second_user=companion)
                 creating_chat.save()
-                return Response('Chat is successful created')
-            else: return Response('Chat is already exist')
+                return Response(creating_chat.id)
+            else: return Response(chatIsExist.id)
         else: return Response('User is not found')
 
 class GetChats(APIView):
@@ -48,19 +50,33 @@ class GetChats(APIView):
 
         users = []
         messages = []
+        
         if chats: 
             for el in chats:
-                messages.append(Messages.objects.filter(chat_id=el.id).order_by('-date_send').first())
+                msg = Messages.objects.filter(chat_id=el.id).order_by('-date_send').first()
+                if msg:
+                    messages.append(msg)
                 if el.first_user != current_user.id:
                     user = User.objects.filter(id=el.first_user).first()
                     users.append(user)
                 if el.second_user != current_user.id:
                     user = User.objects.filter(id=el.second_user).first()
                     users.append(user)
+
+        avatarList = []
+
+        for usr in users:
+            avatar_path = os.path.join('myapp/images/avatars', usr.avatar)
+
+            if os.path.exists(avatar_path):
+                avatar_url = request.build_absolute_uri(f'/images/avatars/{usr.avatar}')
+                avatarList.append({'id': usr.id, 'avatar_url': avatar_url})
+                
+    
         serialized_users = UserSerilizerForChats(users, many=True)
         serialized_chats = ChatSerializer(chats, many=True)
         serialized_messages = MessagesSerializer(messages, many=True)
-        return Response({'chats': serialized_chats.data, 'users': serialized_users.data, 'messages': serialized_messages.data, 'current_user_id': current_user.id})
+        return Response({'chats': serialized_chats.data, 'users': serialized_users.data, 'messages': serialized_messages.data, 'current_user_id': current_user.id, 'avatarList': avatarList })
     
 class GetCompanion(APIView):
     permission_classes = [IsAuthenticated]

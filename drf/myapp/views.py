@@ -1,3 +1,4 @@
+import os
 from rest_framework import generics
 from django.contrib.auth import get_user_model
 from rest_framework.permissions import AllowAny
@@ -11,7 +12,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
-from datetime import timedelta
 
 from .DataBase import *
 
@@ -55,6 +55,7 @@ class ProtectedView(APIView):
     def get(self, request):
         user = request.user
         user_data = {
+            'id': user.id,
             'first_name': user.first_name,
             "auth": True,
             'username': user.username
@@ -75,48 +76,33 @@ class CurrentUserView(APIView):
         username = request.data.get('username')
         current_user = request.user
         user = get_object_or_404(User, username=username)
-        bio = Bio.objects.get(id=user.bio_id)
+        if user:
+            bio = Bio.objects.get(id=user.bio_id)
 
-        last_activity = ''
-        now = timezone.now()
-        last_activity_time = user.last_activity
+            user_data = {
+                'id': user.id,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'username': user.username,
+                'email': user.email,
+                'phone': user.phone,
+                'avatar': user.avatar,
+                'bio': {
+                    'id': bio.id,
+                    'status': bio.status,
+                    'biography': bio.biography,
+                    'birthday_day': bio.birthday_day,
+                    'birthday_month': bio.birthday_month,
+                    'birthday_year': bio.birthday_year,
+                    'show': bio.show
+                }
+            }
 
-        if last_activity_time and now - last_activity_time > timedelta(minutes=5):
-            last_activity_date = last_activity_time.date()
-            now_date = now.date()
-            
-            if last_activity_date != now_date:
-                if (now_date - last_activity_date).days > 1:
-                    last_activity = 'Last activity: ' + last_activity_time.strftime('%H:%M, %d %B')
-                elif (now_date - last_activity_date).days == 1:
-                    last_activity = 'Was online Yesterday at ' + last_activity_time.strftime('%H:%M')
-            else:
-                last_activity = 'Was online Today at ' + last_activity_time.strftime('%H:%M')
-        else:
-            last_activity = 'Online'
-
-        user_data = {
-            'id': user.id,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'username': user.username,
-            'email': user.email,
-            'phone': user.phone,
-            'bio': {
-                'id': bio.id,
-                'status': bio.status,
-                'biography': bio.biography,
-                'birthday_day': bio.birthday_day,
-                'birthday_month': bio.birthday_month,
-                'birthday_year': bio.birthday_year
-            },
-            'last_activity': last_activity
-        }
-
-        isOwner = user.id == current_user.id
+            isOwner = user.id == current_user.id
 
 
-        return Response({'user_data': user_data, 'isOwner': isOwner})
+            return Response({'user_data': user_data, 'isOwner': isOwner})
+        else: return Response(False)
     
 class GetBio(APIView):
     permission_classes = [IsAuthenticated]
@@ -129,7 +115,8 @@ class GetBio(APIView):
             'birthday_day': b.birthday_day,
             'birthday_month': b.birthday_month,
             'birthday_year': b.birthday_year,
-            'status': b.status
+            'status': b.status,
+            'show': b.show
         }
         return Response(bio)
     
@@ -141,6 +128,7 @@ class GetBio(APIView):
         birthday_day = request.data['birthday_day']
         birthday_month = request.data['birthday_month']
         birthday_year = request.data['birthday_year']
+        show = request.data['show']
 
         b.status=status 
         b.biography=biography
@@ -150,6 +138,7 @@ class GetBio(APIView):
             b.birthday_month=birthday_month
         if birthday_year != 0:
             b.birthday_year=birthday_year
+        b.show=show
         b.save()
 
         return Response({'msg': 'Data saved successful!'})
@@ -170,5 +159,62 @@ class CurrentPassword(APIView):
         else: 
             return Response({'msg': 'Uncurrent password!'})
 
+class UploadAvatar(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request):
+        user = request.user
+        image = request.data['image']  # Accessing the image with the correct key
+
+        print(f'Uploaded image: {image.name}')
+
+        db = CustomUser.objects.get(id=user.id)
+        db.avatar_id=user.avatar_id + 1
+        db.avatar=f"avatar_{user.id}_{user.avatar_id + 1}.jpg"
+        db.save()
+
+        file_name = os.path.join('myapp/images/avatars', f"avatar_{user.id}_{user.avatar_id + 1}.jpg")
+        with open(file_name, 'wb') as new_file:
+            for chunk in image.chunks():
+                new_file.write(chunk)
+
+        image_path = f"myapp/images/avatars/avatar_{user.id}_{user.avatar_id}.jpg"
+
+        print(image_path)
+
+        if os.path.exists(image_path):
+            os.remove(image_path)
+
+        return Response('Image received')
+    
+class GetAvatar(APIView):
+    def get(self, request):
+        username = request.GET.get('username')
+        file_name = CustomUser.objects.filter(username=username).values('avatar').first()
+
+        if file_name:
+            avatar_path = os.path.join('myapp/images/avatars', file_name['avatar'])
+
+            if os.path.exists(avatar_path):
+                # Return the URL path instead of the file itself
+                avatar_url = request.build_absolute_uri(f'/images/avatars/{file_name["avatar"]}')
+                return Response({'avatar_url': avatar_url})
+        else:
+            return Response(False, status=status.HTTP_404_NOT_FOUND)
+        
+        
+class GetUserStatuses(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        ids = request.data['user_ids']
+        if ids:
+            print(ids)
+            currentStatuses = []
+            for el in ids:
+                u = CustomUser.objects.filter(id=el).first()
+                currentStatuses.append([{'user_id': u.id, 'new_status': u.online_status}])
             
+            print(currentStatuses)
+        
+        return Response({'statuses': currentStatuses})

@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
+import os
 
 from .models import Friends, CustomUser
 from .serializers import *
@@ -135,10 +136,20 @@ class CheckFriendList(APIView):
             user_ids = [friend for friend in UserList]
             users = CustomUser.objects.filter(id__in=user_ids)
 
+            avatarList = []
+
+            for usr in users:
+                avatar_path = os.path.join('myapp/images/avatars', usr.avatar)
+
+                if os.path.exists(avatar_path):
+                # Return the URL path instead of the file itself
+                    avatar_url = request.build_absolute_uri(f'/images/avatars/{usr.avatar}')
+                    avatarList.append({'id': usr.id, 'avatar_url': avatar_url})
+
             user_data = UserSerializerForFriendRequest(users, many=True).data
             friend_data = FriendsSerializer(rf, many=True).data
 
-            return Response({'friend_data': friend_data, 'user_data': user_data})
+            return Response({'friend_data': friend_data, 'user_data': user_data, 'avatarList': avatarList})
         else: return Response({'not_found': 'User is not found :('})
 
 class ProfileFriends(APIView):
@@ -149,30 +160,32 @@ class ProfileFriends(APIView):
         current_user = request.user
         user = CustomUser.objects.filter(username=username).first()
 
-        is_friends = isFriends(current_user.id, user.id)
-        friend = IsFriendsSerializer(is_friends, many=True)
+        if user:
+            is_friends = isFriends(current_user.id, user.id)
+            friend = IsFriendsSerializer(is_friends, many=True)
 
-        YouAreSubscriber = False
-        RequestIsSended = False
-        YouDidRejected = False
-        YouCanToAccept = False
+            YouAreSubscriber = False
+            RequestIsSended = False
+            YouDidRejected = False
+            YouCanToAccept = False
 
-        for el in is_friends:
-            if el.to_user == current_user.id and not el.is_accept:
-                YouCanToAccept = True
-                
-            if el.from_user == current_user.id and el.in_subscribe:
-                YouAreSubscriber = True
+            for el in is_friends:
+                if el.to_user == current_user.id and not el.is_accept:
+                    YouCanToAccept = True
+                    
+                if el.from_user == current_user.id and el.in_subscribe:
+                    YouAreSubscriber = True
 
-            if el.from_user == current_user.id and not el.in_subscribe and not el.is_accept:
-                RequestIsSended = True
+                if el.from_user == current_user.id and not el.in_subscribe and not el.is_accept:
+                    RequestIsSended = True
 
-            if el.to_user == current_user.id and el.in_subscribe:
-                YouDidRejected = True
+                if el.to_user == current_user.id and el.in_subscribe:
+                    YouDidRejected = True
 
 
-        return Response({'friend': friend.data, 'YouAreSubscriber': YouAreSubscriber, 'RequestIsSended': RequestIsSended, 'YouDidRejected': YouDidRejected, 'YouCanToAccept': YouCanToAccept})
-    
+            return Response({'friend': friend.data, 'YouAreSubscriber': YouAreSubscriber, 'RequestIsSended': RequestIsSended, 'YouDidRejected': YouDidRejected, 'YouCanToAccept': YouCanToAccept})
+        else: return Response(False)
+
 class ToBeFriends(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -7,6 +7,17 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import *
 User = get_user_model()
 
+class ImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'image_url']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.image_url)
+
 class UserSerilizerForChats(serializers.ModelSerializer):
     class Meta:
         model = User

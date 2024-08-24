@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -36,6 +37,9 @@ REST_FRAMEWORK = {
 
 AUTH_USER_MODEL = 'myapp.CustomUser'
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -54,8 +58,14 @@ INSTALLED_APPS = [
     'myapp',
 ]
 
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -63,11 +73,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", 
+    "http://localhost:3000",
 ]
 
 ROOT_URLCONF = 'drf.urls'
@@ -134,10 +143,18 @@ USE_I18N = True
 USE_TZ = False
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-STATIC_URL = 'static/'
+# URL для доступа к статическим файлам
+STATIC_URL = '/images/'
+
+# Папка, в которой Django будет искать статические файлы
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'myapp/images/'),
+]
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
